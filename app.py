@@ -10,6 +10,10 @@ from webdriver_manager.core.os_manager import ChromeType
 from itertools import product
 import time
 
+# Ensure session state initialization
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
+
 
 @st.cache_resource
 def get_driver():
@@ -92,7 +96,7 @@ def password_testing(driver, url, email, email_field_name, password_field_name, 
 
 # Streamlit App
 st.title("Automated Login App with Password Testing")
-st.write("Enter your email and test password combinations.")
+st.write("Enter your email and test password combinations. (For authorized testing only)")
 
 # Input fields
 url = st.text_input("Login URL", placeholder="Enter the login page URL", value="https://app.pallyy.com/login")
