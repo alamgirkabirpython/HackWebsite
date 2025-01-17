@@ -1,8 +1,10 @@
 import streamlit as st
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 from itertools import permutations
 import time
 
@@ -12,8 +14,18 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
     Returns:
         bool: True if login is successful (based on URL match), False otherwise.
     """
+    browser = None
     try:
-        browser = webdriver.Edge()
+        # Set up Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")  # Run in headless mode
+        chrome_options.add_argument("--no-sandbox")  # Required for Streamlit Cloud
+        chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resources
+        
+        # Initialize Chrome WebDriver
+        service = Service("chromedriver")  # Ensure `chromedriver` is in PATH
+        browser = webdriver.Chrome(service=service, options=chrome_options)
+        
         browser.get(url)
         time.sleep(4)
 
@@ -26,7 +38,7 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
             EC.element_to_be_clickable((By.XPATH, login_button_xpath))
         ).click()
 
-        time.sleep(5)  # Wait for page to load (adjust if necessary)
+        time.sleep(5)  # Wait for the page to load
 
         # Check if the URL indicates a successful login
         if browser.current_url == success_url:
@@ -36,7 +48,8 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
         st.error(f"An error occurred during login: {e}")
 
     finally:
-        browser.close()
+        if browser:
+            browser.quit()  # Ensure proper cleanup of the browser instance
 
     return False
 
