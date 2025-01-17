@@ -6,8 +6,28 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from itertools import product
-from webdriver_manager.chrome import ChromeDriverManager
 import time
+import os
+import subprocess
+
+
+def get_chromedriver_path():
+    """
+    Automatically downloads and configures the correct ChromeDriver for the Chromium version.
+    """
+    try:
+        # Get the current Chromium version
+        result = subprocess.run(["chromium", "--version"], stdout=subprocess.PIPE, text=True)
+        chromium_version = result.stdout.strip().split(" ")[1]
+
+        # Install matching ChromeDriver version
+        from webdriver_manager.chrome import ChromeDriverManager
+        chromedriver_path = ChromeDriverManager(version=chromium_version).install()
+        return chromedriver_path
+    except Exception as e:
+        st.error(f"Failed to get the correct ChromeDriver version: {e}")
+        return None
+
 
 def login_to_website(url, email, email_field_name, password_field_name, login_button_xpath, password, success_url):
     """
@@ -16,16 +36,22 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
         bool: True if login is successful (based on URL match), False otherwise.
     """
     try:
+        # Get ChromeDriver path dynamically
+        chromedriver_path = get_chromedriver_path()
+        if not chromedriver_path:
+            return False
+
         # Set Chrome options for headless execution
         chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Run without GUI
-        chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
-        chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
 
-        # Install and use ChromeDriver
-        service = Service(ChromeDriverManager().install())
+        # Initialize WebDriver
+        service = Service(chromedriver_path)
         browser = webdriver.Chrome(service=service, options=chrome_options)
 
+        # Open the website
         browser.get(url)
         time.sleep(4)
 
@@ -33,14 +59,14 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
         browser.find_element(By.NAME, email_field_name).send_keys(email)
         browser.find_element(By.NAME, password_field_name).send_keys(password)
 
-        # Click login button
+        # Click the login button
         WebDriverWait(browser, 5).until(
             EC.element_to_be_clickable((By.XPATH, login_button_xpath))
         ).click()
 
-        time.sleep(5)  # Wait for page to load (adjust if necessary)
+        time.sleep(5)  # Wait for the page to load
 
-        # Check if the URL indicates a successful login
+        # Check if the login is successful
         if browser.current_url == success_url:
             return True
 
@@ -56,7 +82,7 @@ def login_to_website(url, email, email_field_name, password_field_name, login_bu
 
 def password_testing(url, email, email_field_name, password_field_name, login_button_xpath, input_chars, min_length, max_length, success_url):
     """
-    Function to test password combinations for a given email on a specified website.
+    Test password combinations for a given email on a website.
     """
     st.write(f"Testing password combinations for {email} on {url}...")
 
@@ -82,7 +108,7 @@ def password_testing(url, email, email_field_name, password_field_name, login_bu
             if success:
                 st.success(f"Login successful with password: {attempt_password}")
                 st.balloons()
-                return  # Exit upon successful login
+                return  # Exit on success
 
     st.warning("Testing completed. No valid password found.")
 
